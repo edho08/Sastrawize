@@ -11,13 +11,19 @@ class CachedStemmer(object):
         normalizedText = TextNormalizer.normalize_text(text)
 
         words = normalizedText.split(' ')       
-        stems = ''
         cpu_count = thread_count
-        queues = [multiprocessing.Queue()] * cpu_count
+        manager = multiprocessing.Manager()
+        queues = [manager.Queue()] * cpu_count
         processes = [multiprocessing.Process(target = executor, args=(self.inv_stem, i, cpu_count, words, queues[i])) for i in range(cpu_count)]
         [process.start() for process in processes]
+        dicts = {}
         for queue in queues:
-            stems += ' '.join(queue.get()) + ' '
+            arr = queue.get()
+            dicts[arr[0]] = arr[1:]
+        stems = ''
+        for i in range(cpu_count):
+            s = ' '.join(dicts[i])
+            stems = ' '.join([stems, s])
         [process.join() for process in processes]
         return stems
 
@@ -38,7 +44,7 @@ def executor(func, exe_num, exe_count, inp, out):
      start = exe_num * portion
      portion = portion if start+portion<len(inp) else len(inp) - start
      i = start
-     output = []
+     output = [exe_num]
      while i < start+portion:
          output.append(func(inp[i]))
          i += 1
